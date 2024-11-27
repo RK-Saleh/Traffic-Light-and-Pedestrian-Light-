@@ -1,107 +1,60 @@
-//Master
-
-#include <Wire.h>
-
-void setup() { 
-    Wire.begin(); // Start I2C as master
-    pinMode(8, INPUT);      // Button
-    pinMode(6, OUTPUT);     // Green 
-    pinMode(9, OUTPUT);     // Red 
-
-    // Start with pedestrian red
-    digitalWrite(6, LOW); 
-    digitalWrite(9, HIGH); 
-}
-
-void loop() { 
-    if (digitalRead(8) == HIGH) { 
-        // Pedestrian button pressed
-        digitalWrite(6, LOW); //Green OFF
-        digitalWrite(9, HIGH); //Red ON
-
-        // Send button press signal to Slave
-        Wire.beginTransmission(8); // Address of the slave Arduino
-        Wire.write('B');           // Send 'B' for button press
-        Wire.endTransmission();
-
-        delay(2000); 
-        digitalWrite(6, HIGH);    
-        digitalWrite(9, LOW);     
-        delay(6000); 
-      
-        // Reset to initial state
-        digitalWrite(6, LOW);     
-        digitalWrite(9, HIGH);    
-    }
-}
-
-
-//Slave
-
-#include <Wire.h>
-
-enum TrafficState { GREEN, YELLOW, RED_WITH_PEDESTRIAN_GREEN, YELLOW_AFTER_RED };
-
-// Initialize the traffic light state
+enum TrafficState { GREEN, YELLOW, RED, PEDESTRIAN_CROSSING, BACK_TO_GREEN };
 TrafficState currentState = GREEN;
 
-void setup() { 
-    Wire.begin(8); // Start I2C as slave with address 8
-    Wire.onReceive(Receive); // Register Receive Signal
-
-
- 
-  pinMode(7, OUTPUT);
-  pinMode(4, OUTPUT);
-  pinMode(2, OUTPUT);
-
-  
-  
-   // Start green 
-    digitalWrite(2, LOW); 
-    digitalWrite(4, LOW); 
-    digitalWrite(7, HIGH);
- 
+void setup() {
+  pinMode(2, OUTPUT);  // Traffic Red light
+  pinMode(4, OUTPUT);  // Traffic Yellow light
+  pinMode(7, OUTPUT);  // Traffic Green light
+  pinMode(9, OUTPUT);  // Pedestrian Red light
+  pinMode(6, OUTPUT);  // Pedestrian Green light
+  pinMode(8, INPUT);   // Pedestrian button
 }
 
-void loop() { 
-    switch (currentState) {
-        case GREEN:
-            // remains Green until a signal is received from The Master
-            break;
+void loop() {
+  switch (currentState) {
+    case GREEN:
+      digitalWrite(7, HIGH);   // Traffic Green light ON
+      digitalWrite(4, LOW);    // Traffic Yellow light OFF
+      digitalWrite(2, LOW);    // Traffic Red light OFF
+      digitalWrite(9, HIGH);   // Pedestrian Red light ON
+      digitalWrite(6, LOW);    // Pedestrian Green light OFF
+      if (digitalRead(8) == HIGH) { // Check if pedestrian button is pressed
+        currentState = YELLOW;
+      }
+      break;
 
-        case YELLOW:
-            digitalWrite(7, LOW);    
-            digitalWrite(4, HIGH);   
-            delay(2000);              
-            currentState = RED_WITH_PEDESTRIAN_GREEN;
-            break;
+    case YELLOW:
+      digitalWrite(7, LOW);    // Traffic Green light OFF
+      digitalWrite(4, HIGH);   // Traffic Yellow light ON
+      delay(2000);             // Yellow light delay for 2 seconds
+      currentState = RED;
+      break;
 
-        case RED_WITH_PEDESTRIAN_GREEN:
-            digitalWrite(4, LOW);   
-            digitalWrite(2, HIGH);   
-            delay(6000);              
-            currentState = YELLOW_AFTER_RED; 
-            break;
+    case RED:
+      digitalWrite(4, LOW);    // Traffic Yellow light OFF
+      digitalWrite(2, HIGH);   // Traffic Red light ON
+      digitalWrite(9, HIGH);   // Pedestrian Red light ON (stays on initially)
+      delay(1500);             // Red light delay for 1.5 seconds
+      currentState = PEDESTRIAN_CROSSING;
+      break;
 
-        case YELLOW_AFTER_RED:
-           
-            digitalWrite(2, LOW);    
-            digitalWrite(4, HIGH);   
-            delay(2000);             
-            digitalWrite(4, LOW);    
-            digitalWrite(7, HIGH);  
-            currentState = GREEN;     
-            break;
-    }
-}
-//Buton
-void Receive(int bytes) { 
-    while (Wire.available()) { 
-        char c = Wire.read(); 
-        if (c == 'B') { 
-            // Button pressed signal
-            currentState = YELLOW; // Transition to yellow when button is pressed
-        }
-    }
+    case PEDESTRIAN_CROSSING:
+      digitalWrite(9, LOW);    // Pedestrian Red light OFF
+      digitalWrite(6, HIGH);   // Pedestrian Green light ON
+      delay(5000);             // Time for pedestrian to cross (5 seconds)
+      digitalWrite(6, LOW);    // Pedestrian Green light OFF
+      digitalWrite(9, HIGH);   // Pedestrian Red light ON again
+      currentState = BACK_TO_GREEN;
+      break;
+
+    case BACK_TO_GREEN:
+      digitalWrite(2, LOW);    // Traffic Red light OFF
+      digitalWrite(4, HIGH);   // Traffic Yellow light ON
+      delay(2000);             // Yellow light delay before turning green
+      digitalWrite(4, LOW);    // Traffic Yellow light OFF
+      digitalWrite(7, HIGH);   // Traffic Green light ON
+      delay(1000);             // Additional delay before going back to the normal green state
+      currentState = GREEN;
+      break;
+  }
 }
